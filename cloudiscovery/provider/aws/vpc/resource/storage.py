@@ -4,7 +4,13 @@ from typing import List
 
 from botocore.exceptions import ClientError
 
-from provider.aws.common_aws import describe_subnet, resource_tags, get_name_tag
+from provider.aws.common_aws import (
+    describe_subnet,
+    flatten_resource,
+    get_name_tag,
+    resource_overview,
+    resource_tags,
+)
 from provider.aws.vpc.command import VpcOptions, check_ipvpc_inpolicy
 from shared.common import (
     ResourceProvider,
@@ -62,8 +68,21 @@ class EFS(ResourceProvider):
                 if subnets is not None:
                     if subnets["Subnets"][0]["VpcId"] == self.vpc_options.vpc_id:
                         digest = ResourceDigest(
-                            id=data["FileSystemId"], type="aws_efs_file_system"
+                            id=data["FileSystemId"],
+                            type="aws_efs_file_system",
                         )
+                        attributes = flatten_resource(data)
+                        overview_filters = [
+                            "Encrypted",
+                            "FileSystemArn",
+                            "LifeCycleState",
+                            "Name",
+                            "NumberOfMountTargets",
+                            "PerformanceMode",
+                            "ProvisionedThroughputInMibps",
+                            "SizeInBytes.Value",
+                            "ThroughputMode"
+                        ]
                         resources_found.append(
                             Resource(
                                 digest=digest,
@@ -71,13 +90,16 @@ class EFS(ResourceProvider):
                                 details="",
                                 group="storage",
                                 tags=resource_tags(data),
+                                attributes=attributes,
+                                overview=resource_overview(attributes, overview_filters),
                             )
                         )
                         self.relations_found.append(
                             ResourceEdge(
                                 from_node=digest,
                                 to_node=ResourceDigest(
-                                    id=datafilesystem["SubnetId"], type="aws_subnet"
+                                    id=datafilesystem["SubnetId"],
+                                    type="aws_subnet",
                                 ),
                             )
                         )
@@ -130,14 +152,21 @@ class S3POLICY(ResourceProvider):
 
         # check either vpc_id or potential subnet ip are found
         ipvpc_found = check_ipvpc_inpolicy(
-            document=document, vpc_options=self.vpc_options
+            document=document,
+            vpc_options=self.vpc_options,
         )
 
         if ipvpc_found is True:
             tags_response = client.get_bucket_tagging(Bucket=data["Name"])
-            digest = ResourceDigest(id=data["Name"], type="aws_s3_bucket_policy")
+            digest = ResourceDigest(
+                id=data["Name"],
+                type="aws_s3_bucket_policy",
+            )
             self.relations_found.append(
-                ResourceEdge(from_node=digest, to_node=self.vpc_options.vpc_digest())
+                ResourceEdge(
+                    from_node=digest,
+                    to_node=self.vpc_options.vpc_digest()
+                )
             )
             return (
                 True,
@@ -147,6 +176,7 @@ class S3POLICY(ResourceProvider):
                     details="",
                     group="storage",
                     tags=resource_tags(tags_response),
+                    attributes=flatten_resource(data),
                 ),
             )
         return False, None

@@ -266,6 +266,7 @@ With `--threshold 0-100` option, you can customize a minimum percentage threshol
     *   Cloudformation
     *   Cloud Map
     *   CloudWatch Logs
+    *   Direct Connect
     *   Dynamodb
     *   EBS
     *   EC2
@@ -383,7 +384,7 @@ Make sure you have installed [pre-commit](https://pre-commit.com/#installation).
 
 Install development requirements:
 ```sh
-pip install -U -r requirements.txt -r requirements-dev.txt
+pip install -r requirements.txt -r requirements-dev.txt
 ```
 
 Add precommit hooks:

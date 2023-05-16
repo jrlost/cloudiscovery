@@ -1,7 +1,7 @@
 import json
 from typing import List
 
-from provider.aws.common_aws import resource_tags
+from provider.aws.common_aws import resource_tags, flatten_resource
 from provider.aws.vpc.command import VpcOptions, check_ipvpc_inpolicy
 from provider.aws.vpc.resource.database import RDS
 from shared.common import (
@@ -51,7 +51,8 @@ class ELASTICSEARCH(ResourceProvider):
 
             # check either vpc_id or potencial subnet ip are found
             ipvpc_found = check_ipvpc_inpolicy(
-                document=document, vpc_options=self.vpc_options
+                document=document,
+                vpc_options=self.vpc_options,
             )
 
             # elasticsearch uses accesspolicies too, so check both situation
@@ -82,7 +83,10 @@ class ELASTICSEARCH(ResourceProvider):
                     self.relations_found.append(
                         ResourceEdge(
                             from_node=digest,
-                            to_node=ResourceDigest(id=subnet_id, type="aws_subnet"),
+                            to_node=ResourceDigest(
+                                id=subnet_id,
+                                type="aws_subnet",
+                            ),
                         )
                     )
         return resources_found
@@ -118,7 +122,8 @@ class MSK(ResourceProvider):
             msk_subnets = ", ".join(data["BrokerNodeGroupInfo"]["ClientSubnets"])
 
             ec2 = self.vpc_options.session.resource(
-                "ec2", region_name=self.vpc_options.region_name
+                "ec2",
+                region_name=self.vpc_options.region_name
             )
 
             filters = [{"Name": "vpc-id", "Values": [self.vpc_options.vpc_id]}]
@@ -129,7 +134,8 @@ class MSK(ResourceProvider):
 
                 if subnet.id in msk_subnets:
                     digest = ResourceDigest(
-                        id=data["ClusterArn"], type="aws_msk_cluster"
+                        id=data["ClusterArn"],
+                        type="aws_msk_cluster",
                     )
                     resources_found.append(
                         Resource(
@@ -143,7 +149,10 @@ class MSK(ResourceProvider):
                     self.relations_found.append(
                         ResourceEdge(
                             from_node=digest,
-                            to_node=ResourceDigest(id=subnet.id, type="aws_subnet"),
+                            to_node=ResourceDigest(
+                                id=subnet.id,
+                                type="aws_subnet",
+                            ),
                         )
                     )
 
@@ -186,17 +195,22 @@ class QUICKSIGHT(ResourceProvider):
                     AwsAccountId=account_id, DataSourceId=data["DataSourceId"]
                 )
 
-                if "RdsParameters" in data_source["DataSource"]["DataSourceParameters"]:
+                key = "DataSourceParameters"
+                if key not in data_source["DataSource"]:
+                    key = "AlternateDataSourceParameters"
+                    if key not in data_source["DataSource"]:
+                        key = None
 
-                    instance_id = data_source["DataSource"]["DataSourceParameters"][
-                        "RdsParameters"
-                    ]["InstanceId"]
+                if key and "RdsParameters" in data_source["DataSource"][key]:
+
+                    instance_id = data_source["DataSource"][key]["RdsParameters"]["InstanceId"]
                     rds = RDS(self.vpc_options).get_resources(instance_id=instance_id)
 
                     if rds:
 
                         quicksight_digest = ResourceDigest(
-                            id=data["DataSourceId"], type="aws_quicksight"
+                            id=data["DataSourceId"],
+                            type="aws_quicksight",
                         )
                         resources_found.append(
                             Resource(
@@ -210,7 +224,8 @@ class QUICKSIGHT(ResourceProvider):
 
                         self.relations_found.append(
                             ResourceEdge(
-                                from_node=quicksight_digest, to_node=rds[0].digest,
+                                from_node=quicksight_digest,
+                                to_node=rds[0].digest,
                             )
                         )
 
@@ -221,7 +236,8 @@ class QUICKSIGHT(ResourceProvider):
                         in data_source["VpcConnectionProperties"]["VpcConnectionArn"]
                     ):
                         quicksight_digest = ResourceDigest(
-                            id=data["DataSourceId"], type="aws_quicksight"
+                            id=data["DataSourceId"],
+                            type="aws_quicksight",
                         )
                         resources_found.append(
                             Resource(
@@ -237,7 +253,8 @@ class QUICKSIGHT(ResourceProvider):
                             ResourceEdge(
                                 from_node=quicksight_digest,
                                 to_node=ResourceDigest(
-                                    id=self.vpc_options.vpc_id, type="aws_vpc"
+                                    id=self.vpc_options.vpc_id,
+                                    type="aws_vpc",
                                 ),
                             )
                         )

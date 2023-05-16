@@ -17,7 +17,6 @@ from shared.common import (
 from shared.diagram import BaseDiagram
 from shared.report import Report
 
-
 class CommandRunner(object):
     def __init__(self, provider_name: str, filters: List[Filterable] = None):
         """
@@ -94,11 +93,14 @@ class CommandRunner(object):
         unique_resources_dict: Dict[ResourceDigest, Resource] = dict()
         for resource in all_resources:
             unique_resources_dict[resource.digest] = resource
-
         unique_resources = list(unique_resources_dict.values())
-
         unique_resources.sort(key=lambda x: x.group + x.digest.type + x.name)
-        resource_relations.sort(
+
+        unique_resource_relations: Dict[string, ResourceEdge] = dict()
+        for relation in resource_relations:
+            unique_resource_relations[f'{relation.to_node.id}-{relation.from_node.id}'] = relation
+        unique_resource_relations = list(unique_resource_relations.values())
+        unique_resource_relations.sort(
             key=lambda x: x.from_node.type
             + x.from_node.id
             + x.to_node.type
@@ -110,7 +112,7 @@ class CommandRunner(object):
         filtered_resources.sort(key=lambda x: x.group + x.digest.type + x.name)
 
         # Relationships filtering and sorting
-        filtered_relations = filter_relations(filtered_resources, resource_relations)
+        filtered_relations = filter_relations(filtered_resources, unique_resource_relations)
         filtered_relations.sort(
             key=lambda x: x.from_node.type
             + x.from_node.id
@@ -129,12 +131,18 @@ class CommandRunner(object):
         # TODO: Generate reports in json/csv/pdf/xls
         report = Report()
         report.general_report(
-            resources=filtered_resources, resource_relations=filtered_relations
+            resources=filtered_resources,
+            resource_relations=filtered_relations
         )
         report.html_report(
             resources=filtered_resources,
             resource_relations=filtered_relations,
             title=title,
+            filename=filename,
+        )
+        report.json_report(
+            resources=filtered_resources,
+            resource_relations=filtered_relations,
             filename=filename,
         )
 

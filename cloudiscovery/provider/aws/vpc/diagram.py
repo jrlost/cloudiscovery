@@ -1,13 +1,10 @@
 from typing import List, Dict, Optional
 
-from shared.common import ResourceEdge, Resource, ResourceDigest
-from shared.diagram import add_resource_to_group, VPCDiagramsNetDiagram
+from shared.common import ResourceEdge, Resource, ResourceDigest, message_handler
+from shared.diagram import add_resource_to_group, VPCDiagramsNetDiagram, PUBLIC_SUBNET, PRIVATE_SUBNET
 
-PUBLIC_SUBNET = "{public subnet}"
-PRIVATE_SUBNET = "{private subnet}"
 ASG_EC2_AGGREGATE_PREFIX = "asg_ec2_aggregate_"
 ASG_ECS_INSTANCE_AGGREGATE_PREFIX = "asg_ecs_instance_aggregate_"
-
 
 def to_node_get_aggregated(
     resource_relation: ResourceEdge, resources: List[Resource]
@@ -107,11 +104,16 @@ class VpcDiagram(VPCDiagramsNetDiagram):
 
     # pylint: disable=too-many-branches
     def group_by_group(
-        self, resources: List[Resource], initial_resource_relations: List[ResourceEdge]
+        self,
+        resources: List[Resource],
+        initial_resource_relations: List[ResourceEdge]
     ) -> Dict[str, List[Resource]]:
         groups: Dict[str, List[Resource]] = {"": []}
         # pylint: disable=too-many-nested-blocks
         for resource in resources:
+            if isinstance(resource, str) :
+                continue
+
             if resource.digest.type == "aws_subnet":
                 associated_tables = []
                 for relation in initial_resource_relations:
@@ -137,7 +139,9 @@ class VpcDiagram(VPCDiagramsNetDiagram):
                 related_asg = get_ec2_asg(initial_resource_relations, resource.digest)
                 if related_asg is not None:
                     add_resource_to_group(
-                        groups, ASG_EC2_AGGREGATE_PREFIX + related_asg, resource
+                        groups,
+                        ASG_EC2_AGGREGATE_PREFIX + related_asg,
+                        resource
                     )
                 else:
                     add_resource_to_group(groups, "", resource)

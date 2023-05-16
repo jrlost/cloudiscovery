@@ -4,7 +4,7 @@ from assertpy import assert_that
 
 from shared.common import Resource, ResourceDigest
 from shared.diagram import VPCDiagramsNetDiagram
-from shared.diagramsnet import MX_FILE
+from shared.diagramsnet import MX_FILE_TEMPLATE
 
 INFLATED_XML = "<xml />"
 DEFLATED_XML = "s6nIzVHQtwMA"
@@ -32,4 +32,4 @@ class TestDiagramsNetDiagram(TestCase):
         grouped_resources = {"": general_resources}
         relations = []
         result = self.sut.build_diagram(grouped_resources, relations)
-        assert_that(result).starts_with(MX_FILE[:200])
+        assert_that(result).starts_with(MX_FILE_TEMPLATE[:200])

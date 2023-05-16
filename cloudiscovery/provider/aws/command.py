@@ -11,7 +11,7 @@ from shared.common import (
     BaseCommand,
 )
 
-DEFAULT_REGION = "us-east-1"
+DEFAULT_REGION = "us-east-2"
 DEFAULT_PARTITION_CODE = "aws"
 
 

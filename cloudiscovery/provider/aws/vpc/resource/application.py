@@ -2,7 +2,7 @@ import json
 from concurrent.futures.thread import ThreadPoolExecutor
 from typing import List
 
-from provider.aws.common_aws import resource_tags
+from provider.aws.common_aws import resource_tags, flatten_resource
 from provider.aws.vpc.command import VpcOptions, check_ipvpc_inpolicy
 from shared.common import (
     datetime_to_string,
@@ -58,7 +58,8 @@ class SQSPOLICY(ResourceProvider):
     def analyze_queues(self, client, queue):
 
         sqs_queue_policy = client.get_queue_attributes(
-            QueueUrl=queue, AttributeNames=["QueueArn", "Policy"]
+            QueueUrl=queue,
+            AttributeNames=["QueueArn", "Policy"],
         )
 
         if "Attributes" in sqs_queue_policy:
@@ -71,13 +72,15 @@ class SQSPOLICY(ResourceProvider):
 
                 # check either vpc_id or potencial subnet ip are found
                 ipvpc_found = check_ipvpc_inpolicy(
-                    document=document, vpc_options=self.vpc_options
+                    document=document,
+                    vpc_options=self.vpc_options,
                 )
 
                 if ipvpc_found is not False:
                     list_tags_response = client.list_queue_tags(QueueUrl=queue)
                     resource_digest = ResourceDigest(
-                        id=queuearn, type="aws_sqs_queue_policy"
+                        id=queuearn,
+                        type="aws_sqs_queue_policy",
                     )
                     self.relations_found.append(
                         ResourceEdge(
@@ -93,6 +96,7 @@ class SQSPOLICY(ResourceProvider):
                             details="",
                             group="application",
                             tags=resource_tags(list_tags_response),
+                            attributes=flatten_resource(sqs_queue_policy["Attributes"]),
                         ),
                     )
 

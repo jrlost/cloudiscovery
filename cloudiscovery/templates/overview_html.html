@@ -1,0 +1,9 @@
+<p>
+    <span style="font-size: 12pt;"><strong>Overview:</strong></span><br />
+    <div style="font-size: 10pt;">
+        <span><strong>Type:</strong>&nbsp;{{ resource_type }}</span><br />
+        {% for k,v in resource_overview.items() %}
+            <span><strong>{{ k }}:</strong>&nbsp;{{ v }}</span><br />
+        {%- endfor %}
+    </div>
+</p>

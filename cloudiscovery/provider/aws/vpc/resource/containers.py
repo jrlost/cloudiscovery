@@ -1,6 +1,6 @@
 from typing import List
 
-from provider.aws.common_aws import describe_subnet, resource_tags
+from provider.aws.common_aws import describe_subnet, resource_tags, flatten_resource
 from provider.aws.vpc.command import VpcOptions
 from shared.common import (
     ResourceProvider,
@@ -35,7 +35,8 @@ class ECS(ResourceProvider):
 
         clusters_list = client.list_clusters()
         response = client.describe_clusters(
-            clusters=clusters_list["clusterArns"], include=["TAGS"]
+            clusters=clusters_list["clusterArns"],
+            include=["TAGS"]
         )
 
         if self.vpc_options.verbose:
@@ -56,9 +57,7 @@ class ECS(ResourceProvider):
 
                     for data_service_detail in service_details["services"]:
                         if data_service_detail["launchType"] == "FARGATE":
-                            service_subnets = data_service_detail[
-                                "networkConfiguration"
-                            ]["awsvpcConfiguration"]["subnets"]
+                            service_subnets = data_service_detail["networkConfiguration"]["awsvpcConfiguration"]["subnets"]
 
                             # Using subnet to check VPC
                             subnets = describe_subnet(
@@ -82,6 +81,7 @@ class ECS(ResourceProvider):
                                                 details="",
                                                 group="container",
                                                 tags=resource_tags(data),
+                                                attributes=flatten_resource(data),
                                             )
                                         )
                                         self.relations_found.append(
@@ -132,6 +132,7 @@ class ECS(ResourceProvider):
                                             details="Instance in EC2 cluster",
                                             group="container",
                                             tags=resource_tags(data),
+                                            attributes=flatten_resource(data),
                                         )
                                     )
                                     self.relations_found.append(

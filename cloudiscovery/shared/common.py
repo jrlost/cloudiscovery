@@ -20,6 +20,17 @@ FILTER_VALUE_PREFIX = "Value="
 _LOG_SEMAPHORE = threading.Semaphore()
 
 
+def remove_empty_elements(d):
+    def empty(x):
+        return x is None or x == {} or x == [] or x == ""
+
+    if not isinstance(d, (dict, list)):
+        return d
+    elif isinstance(d, list):
+        return [v for v in (remove_empty_elements(v) for v in d) if not empty(v)]
+    else:
+        return {k: v for k, v in ((k, remove_empty_elements(v)) for k, v in d.items()) if not empty(v)}
+
 class bcolors:
     colors = {
         "HEADER": "\033[95m",
@@ -40,12 +51,24 @@ class ResourceDigest(NamedTuple):
     def to_string(self):
         return f"{self.type}:{self.id}"
 
+    def to_json(self):
+        return {
+            "id": self.id,
+            "type": self.type,
+        }
+
 
 class ResourceEdge(NamedTuple):
     from_node: ResourceDigest
     to_node: ResourceDigest
     label: str = None
 
+    def to_json(self):
+        return remove_empty_elements({
+            "from": self.from_node.to_json(),
+            "to": self.to_node.to_json(),
+            "label": self.label if self.label else "",
+        })
 
 # Either key/value is passed or type
 class Filterable(NamedTuple):
@@ -59,6 +82,11 @@ class Filterable(NamedTuple):
     def is_tag(self):
         return self.key is not None and self.value is not None
 
+    def to_json(self):
+        if self.is_tag():
+            return {self.key: self.value}
+        else:
+            return self.type
 
 class LimitsValues(NamedTuple):
     service: str
@@ -69,12 +97,28 @@ class LimitsValues(NamedTuple):
     usage: float
     percent: float
 
+    def to_json(self):
+        return {
+            "service": self.service,
+            "quota_name": self.quota_name,
+            "quota_code": self.quota_code,
+            "aws_limit": self.aws_limit,
+            "local_limit": self.local_limit,
+            "usage": self.usage,
+            "percent": self.percent,
+        }
 
 class SecurityValues(NamedTuple):
     status: str
     parameter: str
     value: str
 
+    def to_json(self):
+        return {
+            "status": self.status,
+            "parameter": self.parameter,
+            "value": self.value
+        }
 
 class Resource(NamedTuple):
     digest: ResourceDigest
@@ -85,7 +129,21 @@ class Resource(NamedTuple):
     limits: LimitsValues = None
     security: SecurityValues = None
     attributes: Dict[str, object] = {}
+    overview: Dict[str, object] = {}
 
+    def to_json(self, relations: List[ResourceEdge] = []):
+        return remove_empty_elements({
+            "id": self.digest.id,
+            "type": self.digest.type,
+            "name": self.name,
+            "details": self.details,
+            "group": self.group,
+            "limits": self.limits.to_json() if self.limits else {},
+            "security": self.security.to_json() if self.security else {},
+            "attributes": self.attributes,
+            "tags": {tag.key: tag.value for tag in self.tags},
+            "relations": [relation.to_json() for relation in relations if relation.from_node.id == self.digest.id or relation.to_node.id == self.digest.id]
+        })
 
 class ResourceCache:
     def __init__(self):

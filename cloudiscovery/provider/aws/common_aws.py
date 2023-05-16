@@ -1,3 +1,5 @@
+import collections
+import datetime
 from typing import List, Dict, Optional
 
 import boto3
@@ -15,7 +17,7 @@ from shared.common import (
 )
 
 SUBNET_CACHE = TTLCache(maxsize=1024, ttl=60)
-
+collections.MutableMapping = collections.abc.MutableMapping
 
 def describe_subnet(vpc_options, subnet_ids):
     if not isinstance(subnet_ids, list):
@@ -170,6 +172,21 @@ class BaseAwsCommand(BaseCommand):
             partition_code=self.partition_code,
         ).paths()
 
+def flatten_resource(resource, parent_key="", sep="."):
+    items = []
+    if isinstance(resource, str):
+        return {}
+    for k, v in resource.items():
+        if k in ['Tags', 'tags', 'AttachTime'] or k.startswith('tags.'):
+            continue
+
+        new_key = parent_key + sep + k if parent_key else k
+        if isinstance(v, collections.MutableMapping):
+            items.extend(flatten_resource(v, new_key, sep=sep).items())
+        else:
+            items.append((new_key, v))
+    return dict(items)
+
 
 def resource_tags(resource_data: dict) -> List[Filterable]:
     if isinstance(resource_data, str):
@@ -194,6 +211,16 @@ def resource_tags(resource_data: dict) -> List[Filterable]:
 
     return tags
 
+def resource_overview(resource, filteredKeys: List[str]) -> Dict[str, object]:
+    def empty(x):
+        return x is None or x == {} or x == [] or x == ""
+
+    source = flatten_resource(resource) if not isinstance(resource, dict) else resource
+
+    if not isinstance(filteredKeys, list):
+        return source
+    
+    return {k:v for (k,v) in source.items() if k in filteredKeys if not empty(v)}
 
 def resource_tags_from_tuples(tuples: List[Dict[str, str]]) -> List[Filterable]:
     """

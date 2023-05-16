@@ -2,7 +2,12 @@ import json
 from concurrent.futures.thread import ThreadPoolExecutor
 from typing import List
 
-from provider.aws.common_aws import resource_tags, get_name_tag
+from provider.aws.common_aws import (
+    resource_tags,
+    resource_overview,
+    get_name_tag,
+    flatten_resource
+)
 from provider.aws.vpc.command import VpcOptions, check_ipvpc_inpolicy
 from shared.common import (
     ResourceProvider,
@@ -14,7 +19,6 @@ from shared.common import (
     ResourceAvailable,
 )
 from shared.error_handler import exception
-
 
 class INTERNETGATEWAY(ResourceProvider):
     def __init__(self, vpc_options: VpcOptions):
@@ -65,7 +69,8 @@ class INTERNETGATEWAY(ResourceProvider):
             )
             self.relations_found.append(
                 ResourceEdge(
-                    from_node=igw_digest, to_node=self.vpc_options.vpc_digest()
+                    from_node=igw_digest,
+                    to_node=self.vpc_options.vpc_digest(),
                 )
             )
 
@@ -105,8 +110,17 @@ class NATGATEWAY(ResourceProvider):
                 name = data["NatGatewayId"] if nametag is None else nametag
 
                 nat_digest = ResourceDigest(
-                    id=data["NatGatewayId"], type="aws_nat_gateway"
+                    id=data["NatGatewayId"],
+                    type="aws_nat_gateway",
                 )
+                attributes = flatten_resource(data)
+                overview_filters = [
+                    "NatGatewayAddresses",
+                    "NatGatewayId",
+                    "ProvisionedBandwidth",
+                    "State",
+                    "ConnectivityType"
+                ]
                 resources_found.append(
                     Resource(
                         digest=nat_digest,
@@ -118,12 +132,17 @@ class NATGATEWAY(ResourceProvider):
                         ),
                         group="network",
                         tags=resource_tags(data),
+                        attributes=attributes,
+                        overview=resource_overview(attributes, overview_filters),
                     )
                 )
                 self.relations_found.append(
                     ResourceEdge(
                         from_node=nat_digest,
-                        to_node=ResourceDigest(id=data["SubnetId"], type="aws_subnet"),
+                        to_node=ResourceDigest(
+                            id=data["SubnetId"],
+                            type="aws_subnet",
+                        ),
                     )
                 )
 
@@ -159,13 +178,17 @@ class ELASTICLOADBALANCING(ResourceProvider):
                     LoadBalancerNames=[data["LoadBalancerName"]]
                 )
                 elb_digest = ResourceDigest(
-                    id=data["LoadBalancerName"], type="aws_elb_classic"
+                    id=data["LoadBalancerName"],
+                    type="aws_elb_classic",
                 )
                 for subnet_id in data["Subnets"]:
                     self.relations_found.append(
                         ResourceEdge(
                             from_node=elb_digest,
-                            to_node=ResourceDigest(id=subnet_id, type="aws_subnet"),
+                            to_node=ResourceDigest(
+                                id=subnet_id,
+                                type="aws_subnet",
+                            ),
                         )
                     )
                 resources_found.append(
@@ -212,7 +235,10 @@ class ELASTICLOADBALANCINGV2(ResourceProvider):
                 tags_response = client.describe_tags(
                     ResourceArns=[data["LoadBalancerArn"]]
                 )
-                elb_digest = ResourceDigest(id=data["LoadBalancerName"], type="aws_elb")
+                elb_digest = ResourceDigest(
+                    id=data["LoadBalancerName"],
+                    type="aws_elb",
+                )
 
                 subnet_ids = []
                 for availabilityZone in data["AvailabilityZones"]:
@@ -221,7 +247,8 @@ class ELASTICLOADBALANCINGV2(ResourceProvider):
                         ResourceEdge(
                             from_node=elb_digest,
                             to_node=ResourceDigest(
-                                id=availabilityZone["SubnetId"], type="aws_subnet"
+                                id=availabilityZone["SubnetId"],
+                                type="aws_subnet",
                             ),
                         )
                     )
@@ -270,7 +297,8 @@ class RouteTable(ResourceProvider):
 
             name = route_table["RouteTableId"] if nametag is None else nametag
             table_digest = ResourceDigest(
-                id=route_table["RouteTableId"], type="aws_route_table"
+                id=route_table["RouteTableId"],
+                type="aws_route_table",
             )
             is_main = False
             for association in route_table["Associations"]:
@@ -279,7 +307,8 @@ class RouteTable(ResourceProvider):
             if is_main:
                 self.relations_found.append(
                     ResourceEdge(
-                        from_node=table_digest, to_node=self.vpc_options.vpc_digest(),
+                        from_node=table_digest,
+                        to_node=self.vpc_options.vpc_digest(),
                     )
                 )
             else:
@@ -304,6 +333,8 @@ class RouteTable(ResourceProvider):
                     and route["GatewayId"].startswith("igw-")
                 ):
                     is_public = True
+            attributes = flatten_resource(route_table)
+            attributes["IsPublic"] = is_public
 
             resources_found.append(
                 Resource(
@@ -312,6 +343,7 @@ class RouteTable(ResourceProvider):
                     details="default: {}, public: {}".format(is_main, is_public),
                     group="network",
                     tags=resource_tags(route_table),
+                    attributes=attributes,
                 )
             )
         return resources_found
@@ -346,7 +378,19 @@ class SUBNET(ResourceProvider):
 
             name = data["SubnetId"] if nametag is None else nametag
 
-            subnet_digest = ResourceDigest(id=data["SubnetId"], type="aws_subnet")
+            subnet_digest = ResourceDigest(
+                id=data["SubnetId"],
+                type="aws_subnet",
+            )
+            attributes = flatten_resource(data)
+            overview_filters = [
+                "AvailabilityZone",
+                "AvailableIpAddressCount",
+                "CidrBlock",
+                "State",
+                "SubnetArn",
+                "SubnetId"
+            ]
             resources_found.append(
                 Resource(
                     digest=subnet_digest,
@@ -356,12 +400,15 @@ class SUBNET(ResourceProvider):
                     ),
                     group="network",
                     tags=resource_tags(data),
+                    attributes=attributes,
+                    overview=resource_overview(attributes, overview_filters),
                 )
             )
 
             self.relations_found.append(
                 ResourceEdge(
-                    from_node=subnet_digest, to_node=self.vpc_options.vpc_digest()
+                    from_node=subnet_digest,
+                    to_node=self.vpc_options.vpc_digest(),
                 )
             )
 
@@ -395,7 +442,8 @@ class NACL(ResourceProvider):
 
         for data in response["NetworkAcls"]:
             nacl_digest = ResourceDigest(
-                id=data["NetworkAclId"], type="aws_network_acl"
+                id=data["NetworkAclId"],
+                type="aws_network_acl",
             )
 
             subnet_ids = []
@@ -405,7 +453,8 @@ class NACL(ResourceProvider):
                     ResourceEdge(
                         from_node=nacl_digest,
                         to_node=ResourceDigest(
-                            id=subnet["SubnetId"], type="aws_subnet"
+                            id=subnet["SubnetId"],
+                            type="aws_subnet",
                         ),
                     )
                 )
@@ -419,6 +468,7 @@ class NACL(ResourceProvider):
                     details="NACL using Subnets {}".format(", ".join(subnet_ids)),
                     group="network",
                     tags=resource_tags(data),
+                    attributes=flatten_resource(data),
                 )
             )
 
@@ -451,6 +501,12 @@ class SECURITYGROUP(ResourceProvider):
 
         for data in response["SecurityGroups"]:
             group_digest = ResourceDigest(id=data["GroupId"], type="aws_security_group")
+            attributes = flatten_resource(data)
+            overview_filters = [
+                "Description",
+                "GroupId",
+                "GroupName"
+            ]
             resources_found.append(
                 Resource(
                     digest=group_digest,
@@ -458,11 +514,14 @@ class SECURITYGROUP(ResourceProvider):
                     details="",
                     group="network",
                     tags=resource_tags(data),
+                    attributes=attributes,
+                    overview=resource_overview(attributes, overview_filters),
                 )
             )
             self.relations_found.append(
                 ResourceEdge(
-                    from_node=group_digest, to_node=self.vpc_options.vpc_digest()
+                    from_node=group_digest,
+                    to_node=self.vpc_options.vpc_digest(),
                 )
             )
 
@@ -510,9 +569,7 @@ class VPCPEERING(ResourceProvider):
                     Resource(
                         digest=peering_digest,
                         name=name,
-                        details="Vpc Peering Accepter OwnerId {}, Accepter Region {}, Accepter VpcId {} \
-                                                         Requester OwnerId {}, Requester Region {}, \
-                                                         Requester VpcId {}".format(
+                        details="Vpc Peering Accepter OwnerId {}, Accepter Region {}, Accepter VpcId {}, Requester OwnerId {}, Requester Region {}, Requester VpcId {}".format(
                             data["AccepterVpcInfo"]["OwnerId"],
                             data["AccepterVpcInfo"]["Region"],
                             data["AccepterVpcInfo"]["VpcId"],
@@ -522,11 +579,13 @@ class VPCPEERING(ResourceProvider):
                         ),
                         group="network",
                         tags=resource_tags(data),
+                        attributes=flatten_resource(data),
                     )
                 )
                 self.relations_found.append(
                     ResourceEdge(
-                        from_node=peering_digest, to_node=self.vpc_options.vpc_digest(),
+                        from_node=peering_digest,
+                        to_node=self.vpc_options.vpc_digest(),
                     )
                 )
         return resources_found
@@ -547,11 +606,19 @@ class VPC(ResourceProvider):
     def get_resources(self) -> List[Resource]:
         client = self.vpc_options.client("ec2")
         vpc_response = client.describe_vpcs(VpcIds=[self.vpc_options.vpc_id])
+        attributes = flatten_resource(vpc_response["Vpcs"][0])
+        overview_filters = [
+            "CidrBlock",
+            "State",
+            "VpcId"
+        ]
         return [
             Resource(
                 digest=self.vpc_options.vpc_digest(),
                 name=self.vpc_options.vpc_id,
                 tags=resource_tags(vpc_response["Vpcs"][0]),
+                attributes=attributes,
+                overview=resource_overview(attributes, overview_filters),
             )
         ]
 
@@ -585,8 +652,16 @@ class VPCENDPOINT(ResourceProvider):
 
             if data["VpcId"] == self.vpc_options.vpc_id:
                 endpoint_digest = ResourceDigest(
-                    id=data["VpcEndpointId"], type="aws_vpc_endpoint_gateway"
+                    id=data["VpcEndpointId"],
+                    type="aws_vpc_endpoint_gateway",
                 )
+                attributes = flatten_resource(data)
+                overview_filters = [
+                    "ServiceName",
+                    "State",
+                    "VpcEndpointId",
+                    "VpcEndpointType",
+                ]
                 if data["VpcEndpointType"] == "Gateway":
                     resources_found.append(
                         Resource(
@@ -597,6 +672,8 @@ class VPCENDPOINT(ResourceProvider):
                             ),
                             group="network",
                             tags=resource_tags(data),
+                            attributes=attributes,
+                            overview=resource_overview(attributes, overview_filters),
                         )
                     )
                     self.relations_found.append(
@@ -615,6 +692,8 @@ class VPCENDPOINT(ResourceProvider):
                             ),
                             group="network",
                             tags=resource_tags(data),
+                            attributes=attributes,
+                            overview=resource_overview(attributes, overview_filters),
                         )
                     )
                     for subnet_id in data["SubnetIds"]:
@@ -672,13 +751,17 @@ class RESTAPIPOLICY(ResourceProvider):
 
         # check either vpc_id or potential subnet ip are found
         ipvpc_found = check_ipvpc_inpolicy(
-            document=document, vpc_options=self.vpc_options
+            document=document,
+            vpc_options=self.vpc_options,
         )
 
         if ipvpc_found is not False:
             digest = ResourceDigest(id=data["id"], type="aws_api_gateway_rest_api")
             self.relations_found.append(
-                ResourceEdge(from_node=digest, to_node=self.vpc_options.vpc_digest())
+                ResourceEdge(
+                    from_node=digest,
+                    to_node=self.vpc_options.vpc_digest(),
+                )
             )
             return (
                 True,
@@ -688,9 +771,59 @@ class RESTAPIPOLICY(ResourceProvider):
                     details="",
                     group="network",
                     tags=resource_tags(data),
+                    attributes=flatten_resource(data),
                 ),
             )
         return False, None
+
+class DirectConnect(ResourceProvider):
+    def __init__(self, vpc_options: VpcOptions):
+        """
+        Direct Connect Gateways
+
+        :param vpc_options:
+        """
+        super().__init__()
+        self.vpc_options = vpc_options
+
+    @exception
+    @ResourceAvailable(services="ec2")
+    def get_resources(self) -> List[Resource]:
+
+        client = self.vpc_options.client("directconnect")
+
+        resources_found = []
+
+        response = client.describe_direct_connect_gateways()
+
+        if self.vpc_options.verbose:
+            message_handler("Collecting data from Direct Connect Gateways...", "HEADER")
+
+        for data in response["directConnectGateways"]:
+            name = data["directConnectGatewayName"]
+            dc_digest = ResourceDigest(
+                id=data["directConnectGatewayId"],
+                type="aws_directconnect",
+            )
+            resources_found.append(
+                Resource(
+                    digest=dc_digest,
+                    name=name,
+                    details="Direct Connect Gateway OwnerId {}, State {}".format(
+                        data["ownerAccount"],
+                        data["directConnectGatewayState"],
+                    ),
+                    group="network",
+                    attributes=flatten_resource(data),
+                )
+            )
+            self.relations_found.append(
+                ResourceEdge(
+                    from_node=peering_digest,
+                    to_node=self.vpc_options.vpc_digest(),
+                )
+            )
+        return resources_found
 
 
 class VpnConnection(ResourceProvider):
@@ -727,7 +860,8 @@ class VpnConnection(ResourceProvider):
                 )
                 if vpn_gateway_response["VpnGateways"]:
                     connection_digest = ResourceDigest(
-                        id=vpn_connection["VpnConnectionId"], type="aws_vpn_connection"
+                        id=vpn_connection["VpnConnectionId"],
+                        type="aws_vpn_connection",
                     )
                     vpn_nametag = get_name_tag(vpn_connection)
                     vpn_name = (
@@ -735,12 +869,24 @@ class VpnConnection(ResourceProvider):
                         if vpn_nametag is None
                         else vpn_nametag
                     )
+                    attributes = flatten_resource(vpn_connection)
+                    overview_filters = [
+                        "Category",
+                        "State",
+                        "Type",
+                        "VpnConnectionId",
+                        "TransitGatewayId",
+                        "Options.LocalIpv4NetworkCidr",
+                        "Options.RemoteIpv4NetworkCidr",
+                    ]
                     resources.append(
                         Resource(
                             digest=connection_digest,
                             name=vpn_name,
                             group="network",
                             tags=resource_tags(vpn_connection),
+                            attributes=attributes,
+                            overview=resource_overview(attributes, overview_filters)
                         )
                     )
 
@@ -752,22 +898,50 @@ class VpnConnection(ResourceProvider):
                     )
 
                     vpn_gateway_digest = ResourceDigest(
-                        id=vpn_gateway_id, type="aws_vpn_gateway"
+                        id=vpn_gateway_id,
+                        type="aws_vpn_gateway"
                     )
                     vgw_nametag = get_name_tag(vpn_gateway_response["VpnGateways"][0])
                     vgw_name = vpn_gateway_id if vgw_nametag is None else vgw_nametag
+                    gateway_attributes = flatten_resource(vpn_gateway_response["VpnGateways"][0])
+                    gateway_overview_filters = [
+                        "State",
+                        "Type",
+                        "VpnGatewayId",
+                        "AmazonSideAsn"
+                    ]
                     resources.append(
                         Resource(
                             digest=vpn_gateway_digest,
                             name=vgw_name,
                             group="network",
                             tags=resource_tags(vpn_gateway_response["VpnGateways"][0]),
+                            attributes=gateway_attributes,
+                            overview=dict({"Name": vgw_name}, **resource_overview(gateway_attributes, gateway_overview_filters))
                         )
                     )
 
+                    vpc_attachments = vpn_gateway_response["VpnGateways"][0]["VpcAttachments"]
+                    if (
+                        vpc_attachments is not None
+                        and vpc_attachments != []
+                    ):
+                        for attachment in vpc_attachments:
+                            if attachment["State"] == "attached":
+                                self.relations_found.append(
+                                    ResourceEdge(
+                                        from_node=vpn_gateway_digest,
+                                        to_node=ResourceDigest(
+                                            id=attachment["VpcId"],
+                                            type="aws_vpc"
+                                        )
+                                    )
+                                )
+
                     self.relations_found.append(
                         ResourceEdge(
-                            from_node=connection_digest, to_node=vpn_gateway_digest
+                            from_node=connection_digest,
+                            to_node=vpn_gateway_digest,
                         )
                     )
 
@@ -776,7 +950,10 @@ class VpnConnection(ResourceProvider):
                         and vpn_connection["CustomerGatewayId"] != ""
                     ):
                         self.add_customer_gateway(
-                            client, connection_digest, resources, vpn_connection
+                            client,
+                            connection_digest,
+                            resources,
+                            vpn_connection,
                         )
 
         return resources
@@ -789,20 +966,35 @@ class VpnConnection(ResourceProvider):
             CustomerGatewayIds=[customer_gateway_id]
         )
         vcw_gateway_digest = ResourceDigest(
-            id=customer_gateway_id, type="aws_customer_gateway"
+            id=customer_gateway_id,
+            type="aws_customer_gateway",
         )
         vcw_nametag = get_name_tag(vcw_gateway_response["CustomerGateways"][0])
         vcw_name = customer_gateway_id if vcw_nametag is None else vcw_nametag
+        attributes = flatten_resource(vcw_gateway_response["CustomerGateways"][0])
+        overview_filters = [
+            "DeviceName",
+            "BgpAsn",
+            "CustomerGatewayId",
+            "IpAddress",
+            "State",
+            "Type"
+        ]
         resources.append(
             Resource(
                 digest=vcw_gateway_digest,
                 name=vcw_name,
                 group="network",
                 tags=resource_tags(vcw_gateway_response["CustomerGateways"][0]),
+                attributes=attributes,
+                overview=dict({"Name": vcw_name}, **resource_overview(attributes, overview_filters)),
             )
         )
         self.relations_found.append(
-            ResourceEdge(from_node=connection_digest, to_node=vcw_gateway_digest)
+            ResourceEdge(
+                from_node=connection_digest,
+                to_node=vcw_gateway_digest,
+            )
         )
 
 
@@ -841,12 +1033,14 @@ class VpnClientEndpoint(ResourceProvider):
                         name=name,
                         group="network",
                         tags=resource_tags(client_vpn_endpoint),
+                        attributes=flatten_resource(client_vpn_endpoint),
                     )
                 )
 
                 self.relations_found.append(
                     ResourceEdge(
-                        from_node=digest, to_node=self.vpc_options.vpc_digest()
+                        from_node=digest,
+                        to_node=self.vpc_options.vpc_digest(),
                     )
                 )
 

@@ -13,6 +13,10 @@ def all_exception(func):
             return func(*args, **kwargs)
         # pylint: disable=broad-except
         except Exception as e:
+            if e.__class__.__name__ == "UnauthorizedClientException":
+                print('Unauthorized')
+                return
+
             if func.__qualname__ == "AllResources.analyze_operation":
                 if not args[0].options.verbose:
                     return

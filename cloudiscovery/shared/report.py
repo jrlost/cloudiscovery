@@ -1,4 +1,5 @@
 import base64
+import json
 import os
 import os.path
 from pathlib import Path
@@ -11,7 +12,7 @@ from shared.diagram import PATH_DIAGRAM_OUTPUT
 from shared.error_handler import exception
 
 PATH_REPORT_HTML_OUTPUT = "./assets/html_report/"
-
+PATH_REPORT_JSON_OUTPUT = "./assets/json_report/"
 
 class Report(object):
     @staticmethod
@@ -151,3 +152,21 @@ class Report(object):
 
             message_handler("\n\nHTML report generated", "HEADER")
             message_handler("Check your HTML report: " + name_output, "OKBLUE")
+
+    @exception
+    def json_report(
+        self,
+        resources: List[Resource],
+        resource_relations: List[ResourceEdge],
+        filename: str,
+    ):
+        if resources:
+            Path(PATH_REPORT_JSON_OUTPUT).mkdir(parents=True, exist_ok=True)
+            name_output = PATH_REPORT_JSON_OUTPUT + filename + ".json"
+
+            with open(name_output, "w") as file_output:
+                json.dump([resource.to_json(resource_relations) for resource in resources], file_output, indent=4, default=str)
+            
+            message_handler("\n\nJSON report generated", "HEADER")
+            message_handler("Check your JSON report: " + name_output, "OKBLUE")
+            

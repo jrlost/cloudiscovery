@@ -5,7 +5,7 @@ repos:
     hooks:
       - id: black
         language_version: python3
-  - repo: git://github.com/guykisel/prospector-mirror
-    rev: '7ff847e779347033ebbd9e3b88279e7f3a998b45'
+  - repo: https://github.com/PyCQA/prospector
+    rev: 1.9.0
     hooks:
       - id: prospector
